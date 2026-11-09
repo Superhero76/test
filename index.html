@@ -112,15 +112,15 @@ Fin du prototype : merci pour le test.</p>
 <div id="ar"></div>
 <div id="arh">Balise T1 · visez le repère</div>
 <div id="arq">
- <div class="etiq">CONTRÔLE TERRAIN</div>
- <div class="log">Quelle lettre la balise désigne-t-elle ?</div>
- <input id="rar" maxlength="1" autocomplete="off">
+ <div class="etiq" id="arn">CONTRÔLE TERRAIN</div>
+ <div class="log" id="arqt"></div>
+ <input id="rar" maxlength="3" autocomplete="off">
  <button id="bar">Valider</button>
  <div class="msg" id="mar"></div>
 </div>
 
 <script type="module">
-const D = {"journal": [["ALIM", "E-12", "ANTENNE et GPS fonctionnent."], ["ANTENNE", "E-31", "Le module en panne est HORLOGE ou RELAIS."], ["HORLOGE", "E-47", "RELAIS est en panne."], ["GPS", "E-58", "ALIM fonctionne."], ["MÉMOIRE", "E-63", "RELAIS fonctionne."], ["RELAIS", "E-75", "MÉMOIRE fonctionne."]], "grille": {"n": 5, "bornes": {"jaune": [8, 17], "bleu": [22, 13], "rouge": [14, 6], "vert": [11, 20]}}, "cadrans": ["A + B + C = 15", "A − C = 3", "B = 2 × C"], "h": {"r1": "92f753e1765ed7fcf78261e0474eb15bdf410955e2009b0f8c55871a03862fb6", "r2": "c464811101487457b51c519b4e36f4d246943133e3999b34c602ea5c50a06235", "r3": "a64470c190d6787a324c14a7ded843748c2ce12ff5310bd863f4488274135b36"}, "sorties": {"r2": "4"}, "coffre": "lEpNq32C6iEgvCXL4monDjiI3t5oJhrjMmkhIGNDwyQ0um6o5/HKZdCNcm+a022/YcRDggsZRz0dRlCSF7w/n8LScugV22cklnv81IIDtyRhnXTvSW5GIM518GeXL2d3zH714bVekKy30OIsOpvlLI5uGdz4EkiaufektV9u/xyMzwmkOBPvkWAziULp/4zS+hRhA16M0MxrfHkZllokXNDa8wln0yVXI0Jtr03IA3mx3jby3NYxzhbGMz61595DW7JRrC14Ao7MANv6S5IX7myUkQSxo2iM", "sel": "lh2050-proto-sel"};
+const D = {"journal": [["ALIM", "E-12", "ANTENNE et GPS fonctionnent."], ["ANTENNE", "E-31", "Le module en panne est HORLOGE ou RELAIS."], ["HORLOGE", "E-47", "RELAIS est en panne."], ["GPS", "E-58", "ALIM fonctionne."], ["MÉMOIRE", "E-63", "RELAIS fonctionne."], ["RELAIS", "E-75", "MÉMOIRE fonctionne."]], "grille": {"n": 5, "bornes": {"jaune": [8, 17], "bleu": [22, 13], "rouge": [14, 6], "vert": [11, 20]}}, "cadrans": ["A + B + C = 15", "A − C = 3", "B = 2 × C"], "h": {"r1": "92f753e1765ed7fcf78261e0474eb15bdf410955e2009b0f8c55871a03862fb6", "r2": "c464811101487457b51c519b4e36f4d246943133e3999b34c602ea5c50a06235", "r3": "a64470c190d6787a324c14a7ded843748c2ce12ff5310bd863f4488274135b36"}, "sorties": {"r2": "4"}, "coffre": "d3W7Kf2mdm2zcpKPGTAA0Oe0BkQKq7ncA/0Hc6J9QEOksZ6KRU8W7zGSkUg9PUr48RD1Xeee6Xb2ZMJY6tmdMO5+Cu+T4N8TGyJJzZXydVDaenPZWYY9qXZUWyNZjud4b1gGqeGhCv6CGQnVX9WLh8tmkfaQl2UHbTYSxAQByA3UDbJvEq4UzS08vqdU4qqfeOHGeTI5KrDK6yI+J0e/7iY3uKACO+fHVAwpOpvMoIvm+c7C/OhoZBJF5JfaDcNqM/bDmSftmsqBoJrU0zqjH/1KGrjPErXUb3PEF8p2DbvKhA9ScQb8Ym7zU0pndA4EGVBgnpfT/YNZ+Sj9zLEKHMOUKIXsiwxieghzgZ4TZU2tzPe30u2JXXeSUppoTjAwZ5P8Y/SUdU/CtwVzX+X0+oomsKsfMdp2Mu9SIi7gul8yjMR8TYTG2ebc6gMMO3+S1ANUrdJCVOED6RZxhWZ97xEjHvvHk5RjSfZGix/sbhgEOEijPfwmieV75NcdqW1VRvrZ0KR2INNFtBxxGerX4KefkHb1k2xMkwsHJtm6GGFlL9LN1jL++fmnZdJEhs5yUm8uYAcRhaMQP6lXejFjQgksXnGQrTjrGP3vKRpe9Q==", "sel": "lh2050-proto-sel"};
 const $ = id => document.getElementById(id);
 const norm = s => s.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'');
 async function h(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('lh2050-proto|'+s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
@@ -225,21 +225,26 @@ $('b5').onclick=async()=>{
   const pointe=new THREE.Mesh(new THREE.ConeGeometry(.045,.1,24),mat);pointe.rotation.z=Math.PI;pointe.position.y=.05;
   const tige=new THREE.Mesh(new THREE.CylinderGeometry(.015,.015,.16,16),mat);tige.position.y=.18;
   fl.add(pointe,tige);
-  const X=terrain.x, Y=terrain.y, RH=terrain.ratio;
+  const PTS=terrain.points, RH=terrain.ratio; let pt=0, cible={x:PTS[0].x,y:PTS[0].y,r:PTS[0].rot};
+  const poser=k=>{pt=k;etat.point=k;$('arn').textContent=`CONTRÔLE TERRAIN · POINT ${k+1}/${PTS.length}`;$('arqt').textContent=PTS[k].q;$('rar').value='';$('mar').textContent='';cible={x:PTS[k].x,y:PTS[k].y,r:PTS[k].rot};};
+  etat.suivant=poser;poser(0);
   const cadre=new THREE.Group(), mc=new THREE.MeshBasicMaterial({color:0x5ff3e6,transparent:true,opacity:.9}), e=.025;
   for(const [w,hh,px,py] of [[1+2*e,e,0,RH/2+e/2],[1+2*e,e,0,-RH/2-e/2],[e,RH,-.5-e/2,0],[e,RH,.5+e/2,0]]){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,hh),mc);m.position.set(px,py,0);cadre.add(m);}
-  fl.position.set(X,Y,.02);
+  fl.position.set(cible.x,cible.y,.02);
   const ancre=mindar.addAnchor(0);ancre.group.add(fl,cadre);
   ancre.onTargetFound=()=>{etat.vu=(etat.vu||0)+1;$('arh').textContent='Balise T1 · repère reconnu';$('arq').classList.add('on');};
   ancre.onTargetLost=()=>{$('arh').textContent='Balise T1 · visez le repère';};
-  await mindar.start();etat.arPret=true;
+  mindar.__pts=PTS;await mindar.start();etat.arPret=true;
   const clk=new THREE.Clock();
-  renderer.setAnimationLoop(()=>{const t=clk.getElapsedTime();mc.opacity=.55+.4*Math.sin(t*4)**2;fl.position.z=.02+.03*(1+Math.sin(t*3));fl.position.y=Y+.015*Math.sin(t*3);renderer.render(scene,camera);});
+  const base=new THREE.Vector2(cible.x,cible.y);
+  renderer.setAnimationLoop(()=>{const t=clk.getElapsedTime();mc.opacity=.55+.4*Math.sin(t*4)**2;
+    base.lerp(new THREE.Vector2(cible.x,cible.y),.06);fl.rotation.z+=(cible.r-fl.rotation.z)*.06;
+    const b=.015*Math.sin(t*3);fl.position.set(base.x-Math.sin(fl.rotation.z)*b,base.y+Math.cos(fl.rotation.z)*b,.02+.03*(1+Math.sin(t*3)));renderer.render(scene,camera);});
 };
 $('bar').onclick=async()=>{
-  if(await h(norm($('rar').value))===terrain.har){mindar&&(mindar.renderer.setAnimationLoop(null),mindar.stop());
+  const pt=etat.point;if(await h(norm($('rar').value))===mindar.__pts[pt].h){if(pt+1<mindar.__pts.length){$('mar').className='msg ok';$('mar').textContent='Relevé enregistré.';setTimeout(()=>etat.suivant(pt+1),700);return;}mindar&&(mindar.renderer.setAnimationLoop(null),mindar.stop());
     $('ar').classList.remove('on');$('arh').classList.remove('on');$('arq').classList.remove('on');aller('e5');}
-  else{$('mar').className='msg ko';$('mar').textContent='Ce n\'est pas la lettre désignée.';}};
+  else{$('mar').className='msg ko';$('mar').textContent='Relevé incorrect.';}};
 </script>
 </body>
 </html>
