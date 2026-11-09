@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<link rel="icon" href="data:,">
+<title>LH 2050 · Console de maintenance (prototype)</title>
+<style>
+:root{--f:#0b1418;--p:#122229;--l:#5ff3e6;--t:#cfe9ec;--a:#ffb347;--e:#ff5d6c}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--f);color:var(--t);font:16px/1.45 ui-monospace,Menlo,Consolas,monospace}
+#app{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:15px;letter-spacing:.12em;color:var(--l);margin:0 0 4px}
+.sous{font-size:12px;opacity:.6;margin-bottom:14px}
+.ecran{display:none;background:var(--p);border:1px solid #1f3a44;border-radius:8px;padding:14px}
+.ecran.on{display:block}
+.etiq{font-size:12px;color:var(--a);letter-spacing:.1em;margin-bottom:8px}
+.log{font-size:13px;white-space:pre-wrap;margin:0 0 12px}
+.log b{color:var(--l);font-weight:normal}
+button{background:transparent;color:var(--l);border:1px solid var(--l);border-radius:6px;padding:10px 14px;font:inherit;cursor:pointer;width:100%;margin-top:10px}
+button:disabled{opacity:.35}
+input{background:#071013;color:var(--t);border:1px solid #2c5260;border-radius:6px;padding:10px;font:inherit;width:100%;text-transform:uppercase}
+.msg{min-height:1.4em;font-size:13px;margin-top:8px}
+.msg.ko{color:var(--e)}.msg.ok{color:var(--l)}
+#grille{display:grid;gap:4px;touch-action:none;user-select:none;margin:6px auto;width:min(100%,330px);aspect-ratio:1}
+#grille div{background:#0a1a20;border-radius:4px;position:relative}
+#grille div i{position:absolute;inset:22%;border-radius:50%}
+#grille div.fil{opacity:.75}
+.mol{display:flex;gap:12px;justify-content:center;margin:10px 0}
+.mol div{text-align:center}
+.mol span{display:block;font-size:34px;color:var(--a);width:56px;padding:6px 0;border:1px solid #2c5260;border-radius:6px;margin:4px 0}
+.mol button{width:56px;padding:4px;margin:0}
+.cad{display:flex;gap:6px;flex-wrap:wrap}
+.cad div{flex:1 1 30%;border:1px solid #2c5260;border-radius:6px;padding:8px 4px;text-align:center;font-size:13px}
+#signal{height:30px;border:1px solid #2c5260;border-radius:6px;margin-top:10px;overflow:hidden}
+#ar{position:fixed;inset:0;display:none;background:#000}
+#ar.on{display:block}
+#arq{position:fixed;left:0;right:0;bottom:0;padding:12px 16px 18px;background:rgba(11,20,24,.88);display:none;z-index:20}
+#arq.on{display:block}
+#arh{position:fixed;top:0;left:0;right:0;padding:10px 16px;background:rgba(11,20,24,.75);z-index:20;font-size:13px;color:var(--l);display:none}
+#arh.on{display:block}
+</style>
+<script type="importmap">{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/addons/"}}</script>
+</head>
+<body>
+<div id="app">
+ <h1>RÉSEAU DE BALISES · LE HAVRE 2050</h1>
+ <div class="sous">Console de maintenance · prototype de test</div>
+
+ <section class="ecran on" id="e0">
+  <div class="etiq">TICKET D'INTERVENTION N° 2050-117</div>
+  <p class="log">Secteur : ville basse.
+État : balises hors service.
+Technicien affecté : vous.
+
+Rétablir le réseau, puis contrôler la balise sur le terrain.</p>
+  <button data-go="e1">Ouvrir la console</button>
+ </section>
+
+ <section class="ecran" id="e1">
+  <div class="etiq">1 · DIAGNOSTIC</div>
+  <div class="log" id="journal"></div>
+  <input id="r1" placeholder="CODE DE DÉFAUT" autocomplete="off">
+  <button id="b1">Valider</button>
+  <div class="msg" id="m1"></div>
+ </section>
+
+ <section class="ecran" id="e2">
+  <div class="etiq">2 · BORNIER</div>
+  <p class="log">Rebranchez chaque fil entre ses deux bornes de même couleur. Les fils ne se croisent pas et occupent tout le bornier.</p>
+  <div id="grille"></div>
+  <div class="msg" id="m2"></div>
+  <button id="b2r">Tout débrancher</button>
+ </section>
+
+ <section class="ecran" id="e3">
+  <div class="etiq">3 · ANTENNE</div>
+  <p class="log">Réglez les molettes A, B, C pour que les trois cadrans soient satisfaits.</p>
+  <div class="cad" id="cadrans"></div>
+  <div class="mol" id="molettes"></div>
+  <div id="signal"><svg viewBox="0 0 300 30" width="100%" height="30" preserveAspectRatio="none"><polyline id="onde" fill="none" stroke="#5ff3e6" stroke-width="1.5" points="0,15 300,15"/></svg></div>
+  <button id="b3">Émettre</button>
+  <div class="msg" id="m3"></div>
+ </section>
+
+ <section class="ecran" id="e4">
+  <div class="etiq">4 · REDÉMARRAGE</div>
+  <p class="log" id="bilan"></p>
+  <button id="b4">Redémarrer la balise</button>
+  <p class="log" id="t1" style="display:none;margin-top:12px">Balise T1 en ligne. <b>Mode terrain activé.</b>
+Rendez-vous devant le repère et visez-le avec la caméra.</p>
+  <button id="b5" style="display:none">Activer la caméra</button>
+ </section>
+
+ <section class="ecran" id="e5">
+  <div class="etiq">INTERVENTION TERMINÉE</div>
+  <p class="log"><b>Balise T1 rallumée.</b>
+Fin du prototype : merci pour le test.</p>
+ </section>
+</div>
+
+<div id="ar"></div>
+<div id="arh">Balise T1 · visez le repère</div>
+<div id="arq">
+ <div class="etiq">CONTRÔLE TERRAIN</div>
+ <div class="log">Quelle lettre la balise désigne-t-elle ?</div>
+ <input id="rar" maxlength="1" autocomplete="off">
+ <button id="bar">Valider</button>
+ <div class="msg" id="mar"></div>
+</div>
+
+<script type="module">
+const D = {"journal": [["ALIM", "E-12", "ANTENNE et GPS fonctionnent."], ["ANTENNE", "E-31", "Le module en panne est HORLOGE ou RELAIS."], ["HORLOGE", "E-47", "RELAIS est en panne."], ["GPS", "E-58", "ALIM fonctionne."], ["MÉMOIRE", "E-63", "RELAIS fonctionne."], ["RELAIS", "E-75", "MÉMOIRE fonctionne."]], "grille": {"n": 5, "bornes": {"jaune": [8, 17], "bleu": [22, 13], "rouge": [14, 6], "vert": [11, 20]}}, "cadrans": ["A + B + C = 15", "A − C = 3", "B = 2 × C"], "h": {"r1": "92f753e1765ed7fcf78261e0474eb15bdf410955e2009b0f8c55871a03862fb6", "r2": "c464811101487457b51c519b4e36f4d246943133e3999b34c602ea5c50a06235", "r3": "a64470c190d6787a324c14a7ded843748c2ce12ff5310bd863f4488274135b36", "ar": "a60b4ccfe9ef13d94e19b14fe747fad696cb3a2ea874b2754112fd9f2efd853e"}, "sorties": {"r2": "4"}};
+const $ = id => document.getElementById(id);
+const norm = s => s.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'');
+async function h(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('lh2050-proto|'+s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+const etat = window.__proto = {ecran:'e0', r2:null};
+function aller(id){document.querySelectorAll('.ecran').forEach(e=>e.classList.toggle('on',e.id===id));etat.ecran=id;window.scrollTo(0,0);}
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>aller(b.dataset.go));
+
+// ---- R1 : journal sans consigne, surchauffe 30 s après erreur
+let t0=8*3600+14*60+2;
+$('journal').innerHTML = D.journal.map(([m,c,t],i)=>{const s=t0+i*7;const hh=String(Math.floor(s/3600)).padStart(2,'0'),mm=String(Math.floor(s/60)%60).padStart(2,'0'),ss=String(s%60).padStart(2,'0');return `[${hh}:${mm}:${ss}] <b>${m}</b> ${c} : ${t}`;}).join('\n');
+let chaud=0;
+$('b1').onclick = async ()=>{
+  if(Date.now()<chaud) return;
+  const v=norm($('r1').value).replace(/^E-?/,'E-');
+  if(await h(v)===D.h.r1){etat.r1=v;$('m1').className='msg ok';$('m1').textContent='Module isolé.';setTimeout(()=>aller('e2'),700);return;}
+  chaud=Date.now()+30000;$('b1').disabled=true;$('m1').className='msg ko';
+  const tic=()=>{const r=Math.ceil((chaud-Date.now())/1000);if(r>0){$('m1').textContent=`Surchauffe de la console : ${r} s`;setTimeout(tic,250);}else{$('m1').textContent='';$('b1').disabled=false;}};tic();
+};
+
+// ---- R2 : liaison sans croisement
+const N=D.grille.n, COUL={jaune:'#ffd23f',bleu:'#3fa9ff',rouge:'#ff5d6c',vert:'#4fdc7a'};
+const borne={};for(const [c,[a,b]] of Object.entries(D.grille.bornes)){borne[a]=c;borne[b]=c;}
+const fils={};for(const c in D.grille.bornes)fils[c]=[];
+const G=$('grille');G.style.gridTemplateColumns=`repeat(${N},1fr)`;
+const cases=[];for(let i=0;i<N*N;i++){const d=document.createElement('div');d.dataset.i=i;if(borne[i]!==undefined){const p=document.createElement('i');p.style.background=COUL[borne[i]];d.appendChild(p);}G.appendChild(d);cases.push(d);}
+const adj=(a,b)=>{const ra=Math.floor(a/N),ca=a%N,rb=Math.floor(b/N),cb=b%N;return Math.abs(ra-rb)+Math.abs(ca-cb)===1;};
+const proprio=i=>{for(const c in fils)if(fils[c].includes(i))return c;return null;};
+function couper(c,i){const k=fils[c].indexOf(i);if(k>=0)fils[c]=fils[c].slice(0,k);}
+function dessiner(){cases.forEach((d,i)=>{const c=proprio(i);d.style.background=c?COUL[c]+'99':'';});}
+function complet(c){const f=fils[c],[a,b]=D.grille.bornes[c];return f.length>1&&((f[0]===a&&f.at(-1)===b)||(f[0]===b&&f.at(-1)===a));}
+let actif=null;
+function caseSous(e){const el=document.elementFromPoint(e.clientX,e.clientY);const d=el&&el.closest('#grille div');return d?+d.dataset.i:null;}
+G.addEventListener('pointerdown',e=>{const i=caseSous(e);if(i===null)return;
+  if(borne[i]!==undefined){actif=borne[i];fils[actif]=[i];}
+  else{const c=proprio(i);if(!c)return;actif=c;couper(c,i);fils[c].push(i);}
+  G.setPointerCapture(e.pointerId);dessiner();});
+G.addEventListener('pointermove',e=>{if(!actif)return;const i=caseSous(e);const f=fils[actif];if(i===null||i===f.at(-1))return;
+  if(f.length>1&&i===f.at(-2)){f.pop();dessiner();return;}
+  if(!adj(i,f.at(-1))||complet(actif))return;
+  if(borne[i]!==undefined&&borne[i]!==actif)return;
+  if(f.includes(i)){couper(actif,i);}
+  const autre=proprio(i);if(autre&&autre!==actif)couper(autre,i);
+  f.push(i);dessiner();});
+const fin=async()=>{actif=null;if(!Object.keys(fils).every(complet))return;
+  const s=[];for(let i=0;i<N*N;i++){const c=proprio(i);if(!c)return;s.push(c[0]);}
+  if(await h(s.join(''))===D.h.r2){etat.r2=D.sorties.r2;$('m2').className='msg ok';$('m2').textContent=`Circuit fermé. Sortie relevée : ${D.sorties.r2}.`;setTimeout(()=>aller('e3'),1200);}
+  else{$('m2').className='msg ko';$('m2').textContent='Circuit fermé, mais le bornier ne répond pas.';}};
+G.addEventListener('pointerup',fin);G.addEventListener('pointercancel',fin);
+$('b2r').onclick=()=>{for(const c in fils)fils[c]=[];dessiner();$('m2').textContent='';};
+etat.tracer=(c,chemin)=>{fils[c]=chemin.slice();dessiner();return fin();};
+
+// ---- R3 : molettes, aucun retour partiel
+$('cadrans').innerHTML=D.cadrans.map(c=>`<div>${c}</div>`).join('');
+const mol=[0,0,0];
+$('molettes').innerHTML=['A','B','C'].map((n,k)=>`<div>${n}<button data-k="${k}" data-d="1">▲</button><span id="v${k}">0</span><button data-k="${k}" data-d="-1">▼</button></div>`).join('');
+$('molettes').querySelectorAll('button').forEach(b=>b.onclick=()=>{const k=+b.dataset.k;mol[k]=(mol[k]+ +b.dataset.d+10)%10;$('v'+k).textContent=mol[k];$('m3').textContent='';});
+let phase=0;(function onde(){phase+=.15;const pts=[];for(let x=0;x<=300;x+=6)pts.push(`${x},${15+Math.sin(x/9+phase)*2*Math.random()}`);$('onde').setAttribute('points',pts.join(' '));requestAnimationFrame(onde);})();
+$('b3').onclick=async()=>{const v=mol.join('');
+  if(await h(v)===D.h.r3){etat.r3=v;$('m3').className='msg ok';$('m3').textContent='Signal aligné.';
+    $('bilan').innerHTML=`Relevés du technicien :\n  défaut   <b>${etat.r1}</b>\n  bornier  <b>${etat.r2}</b>\n  antenne  <b>${etat.r3}</b>`;setTimeout(()=>aller('e4'),900);}
+  else{$('m3').className='msg ko';$('m3').textContent='Aucun signal.';}};
+etat.molettes=v=>{v.forEach((x,k)=>{mol[k]=x;$('v'+k).textContent=x;});};
+
+// ---- Redémarrage puis terrain
+$('b4').onclick=()=>{$('b4').disabled=true;$('b4').textContent='Redémarrage…';setTimeout(()=>{$('b4').style.display='none';$('t1').style.display='';$('b5').style.display='';},1500);};
+let mindar=null;
+$('b5').onclick=async()=>{
+  $('ar').classList.add('on');$('arh').classList.add('on');
+  const THREE=await import('three');
+  const {MindARThree}=await import('./lib/mindar-image-three.prod.js');
+  mindar=new MindARThree({container:$('ar'),imageTargetSrc:'./cible.mind',uiLoading:'yes',uiScanning:'yes',uiError:'yes',filterMinCF:0.0001,filterBeta:0.001});
+  const {renderer,scene,camera}=mindar;
+  scene.add(new THREE.HemisphereLight(0xffffff,0x334455,1.4));
+  const fl=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:0x5ff3e6,emissive:0x1a8f86,metalness:.2,roughness:.4});
+  const pointe=new THREE.Mesh(new THREE.ConeGeometry(.045,.1,24),mat);pointe.rotation.z=Math.PI;pointe.position.y=.05;
+  const tige=new THREE.Mesh(new THREE.CylinderGeometry(.015,.015,.16,16),mat);tige.position.y=.18;
+  fl.add(pointe,tige);
+  const X=0.1462, Y=0.1987;
+  fl.position.set(X,Y,.02);
+  const ancre=mindar.addAnchor(0);ancre.group.add(fl);
+  ancre.onTargetFound=()=>{etat.vu=(etat.vu||0)+1;$('arh').textContent='Balise T1 · repère reconnu';$('arq').classList.add('on');};
+  ancre.onTargetLost=()=>{$('arh').textContent='Balise T1 · visez le repère';};
+  await mindar.start();etat.arPret=true;
+  const clk=new THREE.Clock();
+  renderer.setAnimationLoop(()=>{const t=clk.getElapsedTime();fl.position.z=.02+.03*(1+Math.sin(t*3));fl.position.y=Y+.015*Math.sin(t*3);renderer.render(scene,camera);});
+};
+$('bar').onclick=async()=>{
+  if(await h(norm($('rar').value))===D.h.ar){mindar&&(mindar.renderer.setAnimationLoop(null),mindar.stop());
+    $('ar').classList.remove('on');$('arh').classList.remove('on');$('arq').classList.remove('on');aller('e5');}
+  else{$('mar').className='msg ko';$('mar').textContent='Ce n\'est pas la lettre désignée.';}};
+</script>
+</body>
+</html>
