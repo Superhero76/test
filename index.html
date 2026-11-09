@@ -55,6 +55,10 @@ Technicien affecté : vous.
 
 Rétablir le réseau, puis contrôler la balise sur le terrain.</p>
   <button data-go="e1">Ouvrir la console</button>
+  <div class="etiq" style="margin-top:18px">REPRENDRE UNE INTERVENTION</div>
+  <input id="bon" placeholder="BON D'INTERVENTION" autocomplete="off">
+  <button id="bbon">Reprendre</button>
+  <div class="msg" id="mbon"></div>
  </section>
 
  <section class="ecran" id="e1">
@@ -87,8 +91,14 @@ Rétablir le réseau, puis contrôler la balise sur le terrain.</p>
   <div class="etiq">4 · REDÉMARRAGE</div>
   <p class="log" id="bilan"></p>
   <button id="b4">Redémarrer la balise</button>
-  <p class="log" id="t1" style="display:none;margin-top:12px">Balise T1 en ligne. <b>Mode terrain activé.</b>
-Rendez-vous devant le repère et visez-le avec la caméra.</p>
+  <div id="t1" style="display:none;margin-top:12px">
+  <p class="log">Balise T1 en ligne. <b>Mode terrain activé.</b>
+<span id="t1txt"></span></p>
+  <div class="etiq">BON D'INTERVENTION</div>
+  <p class="log" style="font-size:22px;color:var(--a);letter-spacing:.08em;margin:0" id="bonaff"></p>
+  <p class="log" style="font-size:12px;opacity:.75">Sur ce téléphone, l'intervention reprendra seule. Pour continuer sur un autre appareil : scannez ce code, ou saisissez le bon sur l'écran d'accueil de la console.</p>
+  <div id="qr" style="background:#fff;padding:8px;width:max-content;margin:0 auto;border-radius:6px"></div>
+  </div>
   <button id="b5" style="display:none">Activer la caméra</button>
  </section>
 
@@ -110,25 +120,45 @@ Fin du prototype : merci pour le test.</p>
 </div>
 
 <script type="module">
-const D = {"journal": [["ALIM", "E-12", "ANTENNE et GPS fonctionnent."], ["ANTENNE", "E-31", "Le module en panne est HORLOGE ou RELAIS."], ["HORLOGE", "E-47", "RELAIS est en panne."], ["GPS", "E-58", "ALIM fonctionne."], ["MÉMOIRE", "E-63", "RELAIS fonctionne."], ["RELAIS", "E-75", "MÉMOIRE fonctionne."]], "grille": {"n": 5, "bornes": {"jaune": [8, 17], "bleu": [22, 13], "rouge": [14, 6], "vert": [11, 20]}}, "cadrans": ["A + B + C = 15", "A − C = 3", "B = 2 × C"], "h": {"r1": "92f753e1765ed7fcf78261e0474eb15bdf410955e2009b0f8c55871a03862fb6", "r2": "c464811101487457b51c519b4e36f4d246943133e3999b34c602ea5c50a06235", "r3": "a64470c190d6787a324c14a7ded843748c2ce12ff5310bd863f4488274135b36", "ar": "a60b4ccfe9ef13d94e19b14fe747fad696cb3a2ea874b2754112fd9f2efd853e"}, "sorties": {"r2": "4"}};
+const D = {"journal": [["ALIM", "E-12", "ANTENNE et GPS fonctionnent."], ["ANTENNE", "E-31", "Le module en panne est HORLOGE ou RELAIS."], ["HORLOGE", "E-47", "RELAIS est en panne."], ["GPS", "E-58", "ALIM fonctionne."], ["MÉMOIRE", "E-63", "RELAIS fonctionne."], ["RELAIS", "E-75", "MÉMOIRE fonctionne."]], "grille": {"n": 5, "bornes": {"jaune": [8, 17], "bleu": [22, 13], "rouge": [14, 6], "vert": [11, 20]}}, "cadrans": ["A + B + C = 15", "A − C = 3", "B = 2 × C"], "h": {"r1": "92f753e1765ed7fcf78261e0474eb15bdf410955e2009b0f8c55871a03862fb6", "r2": "c464811101487457b51c519b4e36f4d246943133e3999b34c602ea5c50a06235", "r3": "a64470c190d6787a324c14a7ded843748c2ce12ff5310bd863f4488274135b36"}, "sorties": {"r2": "4"}, "coffre": "lEpNq32C6iEgvCXL4monDjiI3t5oJhrjMmkhIGNDwyQ0um6o5/HKZdCNcm+a022/YcRDggsZRz0dRlCSF7w/n8LScugV22cklnv81IIDtyRhnXTvSW5GIM518GeXL2d3zH714bVekKy30OIsOpvlLI5uGdz4EkiaufektV9u/xyMzwmkOBPvkWAziULp/4zS+hRhA16M0MxrfHkZllokXNDa8wln0yVXI0Jtr03IA3mx3jby3NYxzhbGMz61595DW7JRrC14Ao7MANv6S5IX7myUkQSxo2iM", "sel": "lh2050-proto-sel"};
 const $ = id => document.getElementById(id);
 const norm = s => s.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'');
 async function h(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('lh2050-proto|'+s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 const etat = window.__proto = {ecran:'e0', r2:null};
+// ---- sauvegarde locale (pause) et coffre terrain
+const CLE='lh2050-proto';
+const lire=()=>{try{return JSON.parse(localStorage.getItem(CLE))||{};}catch(e){return {};}};
+const ecrire=o=>{try{localStorage.setItem(CLE,JSON.stringify(Object.assign(lire(),o)));}catch(e){}};
+const ALPH='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+async function bonDe(r1,r2s,r3){const b=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`lh2050-proto|reprise|${r1}|${r2s}|${r3}`)));return [...b.slice(0,10)].map(x=>ALPH[x%32]).join('');}
+const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function cleDe(bon){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(bon),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:new TextEncoder().encode(D.sel),iterations:150000,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['decrypt']);}
+const ouvrir=(cle,octets)=>crypto.subtle.decrypt({name:'AES-GCM',iv:octets.slice(0,12)},cle,octets.slice(12));
+let terrain=null, cleT=null;
+async function reprendre(bon){bon=norm(bon).replace(/-/g,'');
+  try{cleT=await cleDe(bon);terrain=JSON.parse(new TextDecoder().decode(await ouvrir(cleT,b64(D.coffre))));}catch(e){terrain=null;return false;}
+  ecrire({bon});etat.bon=bon;$('t1txt').textContent=terrain.texte;$('bonaff').textContent=bon.slice(0,5)+'-'+bon.slice(5);
+  const {default:qrcode}=await import('./lib/qrcode.mjs');const q=qrcode(0,'M');q.addData(location.href.split('#')[0]+'#bon='+bon);q.make();$('qr').innerHTML=q.createSvgTag(4,0);
+  $('bilan').textContent='Intervention reprise : réseau rétabli.';$('b4').style.display='none';$('t1').style.display='';$('b5').style.display='';aller('e4');return true;}
+$('bbon').onclick=async()=>{$('mbon').className='msg';$('mbon').textContent='Vérification…';
+  if(!await reprendre($('bon').value)){$('mbon').className='msg ko';$('mbon').textContent='Bon inconnu.';}};
 function aller(id){document.querySelectorAll('.ecran').forEach(e=>e.classList.toggle('on',e.id===id));etat.ecran=id;window.scrollTo(0,0);}
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>aller(b.dataset.go));
 
 // ---- R1 : journal sans consigne, surchauffe 30 s après erreur
 let t0=8*3600+14*60+2;
 $('journal').innerHTML = D.journal.map(([m,c,t],i)=>{const s=t0+i*7;const hh=String(Math.floor(s/3600)).padStart(2,'0'),mm=String(Math.floor(s/60)%60).padStart(2,'0'),ss=String(s%60).padStart(2,'0');return `[${hh}:${mm}:${ss}] <b>${m}</b> ${c} : ${t}`;}).join('\n');
-let chaud=0;
+let chaud=lire().chaud||0;
 $('b1').onclick = async ()=>{
   if(Date.now()<chaud) return;
   const v=norm($('r1').value).replace(/^E-?/,'E-');
-  if(await h(v)===D.h.r1){etat.r1=v;$('m1').className='msg ok';$('m1').textContent='Module isolé.';setTimeout(()=>aller('e2'),700);return;}
-  chaud=Date.now()+30000;$('b1').disabled=true;$('m1').className='msg ko';
-  const tic=()=>{const r=Math.ceil((chaud-Date.now())/1000);if(r>0){$('m1').textContent=`Surchauffe de la console : ${r} s`;setTimeout(tic,250);}else{$('m1').textContent='';$('b1').disabled=false;}};tic();
+  if(await h(v)===D.h.r1){etat.r1=v;ecrire({r1:v});$('m1').className='msg ok';$('m1').textContent='Module isolé.';setTimeout(()=>aller('e2'),700);return;}
+  chaud=Date.now()+30000;ecrire({chaud});surchauffe();
 };
+function surchauffe(){$('b1').disabled=true;$('m1').className='msg ko';
+  const tic=()=>{const r=Math.ceil((chaud-Date.now())/1000);if(r>0){$('m1').textContent=`Surchauffe de la console : ${r} s`;setTimeout(tic,250);}else{$('m1').textContent='';$('b1').disabled=false;}};tic();}
+if(chaud>Date.now())surchauffe();
 
 // ---- R2 : liaison sans croisement
 const N=D.grille.n, COUL={jaune:'#ffd23f',bleu:'#3fa9ff',rouge:'#ff5d6c',vert:'#4fdc7a'};
@@ -156,7 +186,7 @@ G.addEventListener('pointermove',e=>{if(!actif)return;const i=caseSous(e);const 
   f.push(i);dessiner();});
 const fin=async()=>{actif=null;if(!Object.keys(fils).every(complet))return;
   const s=[];for(let i=0;i<N*N;i++){const c=proprio(i);if(!c)return;s.push(c[0]);}
-  if(await h(s.join(''))===D.h.r2){etat.r2=D.sorties.r2;$('m2').className='msg ok';$('m2').textContent=`Circuit fermé. Sortie relevée : ${D.sorties.r2}.`;setTimeout(()=>aller('e3'),1200);}
+  if(await h(s.join(''))===D.h.r2){etat.r2=D.sorties.r2;etat.r2s=s.join('');ecrire({r2s:etat.r2s});$('m2').className='msg ok';$('m2').textContent=`Circuit fermé. Sortie relevée : ${D.sorties.r2}.`;setTimeout(()=>aller('e3'),1200);}
   else{$('m2').className='msg ko';$('m2').textContent='Circuit fermé, mais le bornier ne répond pas.';}};
 G.addEventListener('pointerup',fin);G.addEventListener('pointercancel',fin);
 $('b2r').onclick=()=>{for(const c in fils)fils[c]=[];dessiner();$('m2').textContent='';};
@@ -169,19 +199,25 @@ $('molettes').innerHTML=['A','B','C'].map((n,k)=>`<div>${n}<button data-k="${k}"
 $('molettes').querySelectorAll('button').forEach(b=>b.onclick=()=>{const k=+b.dataset.k;mol[k]=(mol[k]+ +b.dataset.d+10)%10;$('v'+k).textContent=mol[k];$('m3').textContent='';});
 let phase=0;(function onde(){phase+=.15;const pts=[];for(let x=0;x<=300;x+=6)pts.push(`${x},${15+Math.sin(x/9+phase)*2*Math.random()}`);$('onde').setAttribute('points',pts.join(' '));requestAnimationFrame(onde);})();
 $('b3').onclick=async()=>{const v=mol.join('');
-  if(await h(v)===D.h.r3){etat.r3=v;$('m3').className='msg ok';$('m3').textContent='Signal aligné.';
+  if(await h(v)===D.h.r3){etat.r3=v;ecrire({r3:v});$('m3').className='msg ok';$('m3').textContent='Signal aligné.';
     $('bilan').innerHTML=`Relevés du technicien :\n  défaut   <b>${etat.r1}</b>\n  bornier  <b>${etat.r2}</b>\n  antenne  <b>${etat.r3}</b>`;setTimeout(()=>aller('e4'),900);}
   else{$('m3').className='msg ko';$('m3').textContent='Aucun signal.';}};
 etat.molettes=v=>{v.forEach((x,k)=>{mol[k]=x;$('v'+k).textContent=x;});};
 
 // ---- Redémarrage puis terrain
-$('b4').onclick=()=>{$('b4').disabled=true;$('b4').textContent='Redémarrage…';setTimeout(()=>{$('b4').style.display='none';$('t1').style.display='';$('b5').style.display='';},1500);};
+$('b4').onclick=async()=>{$('b4').disabled=true;$('b4').textContent='Redémarrage…';const bon=await bonDe(etat.r1,etat.r2s,etat.r3);await new Promise(r=>setTimeout(r,1200));await reprendre(bon);};
+// reprise au chargement : #bon=… (QR), sinon sauvegarde locale
+(async()=>{const m=location.hash.match(/bon=([A-Z0-9-]+)/i), s=lire();
+  if(m&&await reprendre(m[1])){history.replaceState(null,'',location.pathname);return;}
+  if(s.bon&&await reprendre(s.bon))return;
+  if(s.r1){etat.r1=s.r1;if(s.r2s){etat.r2s=s.r2s;etat.r2=D.sorties.r2;aller('e3');}else aller('e2');}
+})();
 let mindar=null;
 $('b5').onclick=async()=>{
   $('ar').classList.add('on');$('arh').classList.add('on');
   const THREE=await import('three');
   const {MindARThree}=await import('./lib/mindar-image-three.prod.js');
-  mindar=new MindARThree({container:$('ar'),imageTargetSrc:'./cible.mind',uiLoading:'yes',uiScanning:'yes',uiError:'yes',filterMinCF:0.0001,filterBeta:0.001});
+  mindar=new MindARThree({container:$('ar'),imageTargetSrc:URL.createObjectURL(new Blob([await ouvrir(cleT,new Uint8Array(await (await fetch('./cible.bin')).arrayBuffer()))])),uiLoading:'yes',uiScanning:'yes',uiError:'yes',filterMinCF:0.0005,filterBeta:50,missTolerance:10,warmupTolerance:3});
   const {renderer,scene,camera}=mindar;
   scene.add(new THREE.HemisphereLight(0xffffff,0x334455,1.4));
   const fl=new THREE.Group();
@@ -189,17 +225,19 @@ $('b5').onclick=async()=>{
   const pointe=new THREE.Mesh(new THREE.ConeGeometry(.045,.1,24),mat);pointe.rotation.z=Math.PI;pointe.position.y=.05;
   const tige=new THREE.Mesh(new THREE.CylinderGeometry(.015,.015,.16,16),mat);tige.position.y=.18;
   fl.add(pointe,tige);
-  const X=0.1462, Y=0.1987;
+  const X=terrain.x, Y=terrain.y, RH=terrain.ratio;
+  const cadre=new THREE.Group(), mc=new THREE.MeshBasicMaterial({color:0x5ff3e6,transparent:true,opacity:.9}), e=.025;
+  for(const [w,hh,px,py] of [[1+2*e,e,0,RH/2+e/2],[1+2*e,e,0,-RH/2-e/2],[e,RH,-.5-e/2,0],[e,RH,.5+e/2,0]]){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,hh),mc);m.position.set(px,py,0);cadre.add(m);}
   fl.position.set(X,Y,.02);
-  const ancre=mindar.addAnchor(0);ancre.group.add(fl);
+  const ancre=mindar.addAnchor(0);ancre.group.add(fl,cadre);
   ancre.onTargetFound=()=>{etat.vu=(etat.vu||0)+1;$('arh').textContent='Balise T1 · repère reconnu';$('arq').classList.add('on');};
   ancre.onTargetLost=()=>{$('arh').textContent='Balise T1 · visez le repère';};
   await mindar.start();etat.arPret=true;
   const clk=new THREE.Clock();
-  renderer.setAnimationLoop(()=>{const t=clk.getElapsedTime();fl.position.z=.02+.03*(1+Math.sin(t*3));fl.position.y=Y+.015*Math.sin(t*3);renderer.render(scene,camera);});
+  renderer.setAnimationLoop(()=>{const t=clk.getElapsedTime();mc.opacity=.55+.4*Math.sin(t*4)**2;fl.position.z=.02+.03*(1+Math.sin(t*3));fl.position.y=Y+.015*Math.sin(t*3);renderer.render(scene,camera);});
 };
 $('bar').onclick=async()=>{
-  if(await h(norm($('rar').value))===D.h.ar){mindar&&(mindar.renderer.setAnimationLoop(null),mindar.stop());
+  if(await h(norm($('rar').value))===terrain.har){mindar&&(mindar.renderer.setAnimationLoop(null),mindar.stop());
     $('ar').classList.remove('on');$('arh').classList.remove('on');$('arq').classList.remove('on');aller('e5');}
   else{$('mar').className='msg ko';$('mar').textContent='Ce n\'est pas la lettre désignée.';}};
 </script>
