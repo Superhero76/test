@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Repérage · mesure d'un repère</title>
+<style>
+:root{--f:#0b1418;--p:#122229;--l:#5ff3e6;--t:#cfe9ec;--a:#ffb347;--e:#ff5d6c}
+*{box-sizing:border-box}
+html,body{touch-action:manipulation;-webkit-text-size-adjust:100%;margin:0;background:var(--f);color:var(--t);font:16px/1.45 ui-monospace,Menlo,Consolas,monospace}
+#app{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:18px;color:var(--l);margin:0 0 4px}
+.etiq{font-size:12px;letter-spacing:1px;color:var(--a);margin:18px 0 6px}
+p{margin:6px 0}
+button,.bouton{display:block;width:100%;padding:13px;margin:10px 0;background:var(--p);color:var(--l);border:1px solid var(--l);border-radius:8px;font:inherit;text-align:center}
+button:disabled{opacity:.4}
+button.sec{color:var(--t);border-color:#39505a}
+input[type=text]{width:100%;padding:11px;background:#0a1114;color:var(--t);border:1px solid #39505a;border-radius:8px;font:inherit}
+input[type=file]{display:none}
+#zone{position:relative;display:none;margin:8px 0;touch-action:none}
+#vue{display:block;width:100%;border-radius:6px}
+#cadre{position:absolute;border:2px solid var(--l);background:rgba(95,243,230,.12);pointer-events:none}
+#res{display:none;background:var(--p);border-radius:8px;padding:12px;margin:10px 0}
+#score{font-size:28px;color:var(--l)}
+.bon{color:var(--l)}.juste{color:var(--a)}.faible{color:var(--e)}
+#barre{height:8px;background:#1d2b31;border-radius:4px;overflow:hidden;margin:8px 0;display:none}#barre i{display:block;height:100%;width:0;background:var(--l)}
+.ligne{display:flex;gap:10px;align-items:center;background:var(--p);border-radius:8px;padding:8px;margin:6px 0}
+.ligne img{width:56px;height:56px;object-fit:cover;border-radius:4px}.ligne div{flex:1;min-width:0}.ligne b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ligne button{width:auto;margin:0;padding:8px 10px}
+#ar{position:fixed;inset:0;display:none;background:#000;z-index:10;overflow:hidden}#ar.on{display:block}
+#arh{position:fixed;left:0;right:0;top:0;padding:10px 14px;background:rgba(11,20,24,.88);z-index:20;display:none;font-size:14px}#arh.on{display:block}
+#arb{position:fixed;left:0;right:0;bottom:0;padding:10px 14px 16px;background:rgba(11,20,24,.88);z-index:20;display:none}#arb.on{display:block}
+#arb button{margin:8px 0 0}
+small{color:#8fb0b6}
+</style>
+<script type="importmap">{"imports":{"three":"../lib/three.module.js","three/addons/":"../lib/addons/"}}</script>
+</head>
+<body>
+<div id="app">
+ <h1>Repérage</h1>
+ <small>Mesure si un objet ferait un bon repère pour la caméra. Tout se passe dans ce téléphone : aucune photo n'est envoyée.</small>
+
+ <div class="etiq">1 · PHOTO</div>
+ <p>Bien de face, l'objet remplit l'image, sans reflet ni ombre portée.</p>
+ <label class="bouton" for="f">Photographier un candidat</label>
+ <input type="file" id="f" accept="image/*" capture="environment">
+ <label class="bouton sec" for="f2" style="color:var(--t);border-color:#39505a">Choisir une photo existante</label>
+ <input type="file" id="f2" accept="image/*">
+
+ <div id="zone"><canvas id="vue"></canvas><div id="cadre"></div></div>
+ <div id="etape2" style="display:none">
+  <div class="etiq">2 · CADRAGE</div>
+  <p>Tracez au doigt le rectangle du repère (la surface plane seulement).</p>
+  <button class="sec" id="tout">Reprendre toute l'image</button>
+  <input type="text" id="nom" placeholder="Nom du candidat (ex. plaque fontaine)" maxlength="40">
+  <button id="mesurer">Mesurer</button>
+  <div id="barre"><i id="barrei"></i></div>
+ </div>
+
+ <div id="res">
+  <div class="etiq" style="margin-top:0">3 · RÉSULTAT</div>
+  <div id="score"></div>
+  <div id="verdict"></div>
+  <p><small>Points de suivi, grande et petite échelle. Références : ardoise 37/27 (bon), géocoin 31/16 (bon). C'est un tri : un bon score reste à confirmer à l'essai en direct.</small></p>
+  <div id="avis"></div>
+  <button id="direct">Essayer en direct</button>
+  <a class="bouton sec" id="dl" style="color:var(--t);border-color:#39505a;text-decoration:none">Enregistrer le recadrage</a>
+ </div>
+
+ <div class="etiq">CANDIDATS MESURÉS</div>
+ <div id="liste"><small>Aucun pour l'instant.</small></div>
+</div>
+
+<div id="ar"></div>
+<div id="arh"></div>
+<div id="arb"><div id="art"></div><button id="fermer">Fermer</button></div>
+
+<script type="module">
+const $ = i => document.getElementById(i), CLE = 'lh2050-reperage-v1', L = 800;
+const etat = window.__rep = { suivi: null, vu: 0, perdu: 0 };
+const lire = () => { try { return JSON.parse(localStorage.getItem(CLE)) || []; } catch (e) { return []; } };
+const ecrire = l => { try { localStorage.setItem(CLE, JSON.stringify(l)); } catch (e) {} };
+
+let img = null, rect = null, cible = null, recadre = null;
+const vue = $('vue'), cadre = $('cadre');
+function placer() { const k = vue.clientWidth / img.width; Object.assign(cadre.style, { left: rect.x * k + 'px', top: rect.y * k + 'px', width: rect.w * k + 'px', height: rect.h * k + 'px' }); }
+async function charger(fichier) {
+  if (!fichier) return; const b = await createImageBitmap(fichier, { imageOrientation: 'from-image' }).catch(() => null); if (!b) return;
+  const k = Math.min(1, 2000 / Math.max(b.width, b.height)); vue.width = Math.round(b.width * k); vue.height = Math.round(b.height * k);
+  vue.getContext('2d').drawImage(b, 0, 0, vue.width, vue.height); img = vue; rect = { x: 0, y: 0, w: vue.width, h: vue.height };
+  $('zone').style.display = 'block'; $('etape2').style.display = 'block'; $('res').style.display = 'none'; placer(); etat.photo = [vue.width, vue.height];
+}
+$('f').onchange = e => charger(e.target.files[0]); $('f2').onchange = e => charger(e.target.files[0]);
+$('tout').onclick = () => { rect = { x: 0, y: 0, w: img.width, h: img.height }; placer(); };
+let d0 = null; const pt = e => { const r = vue.getBoundingClientRect(), k = img.width / r.width; return [Math.max(0, Math.min(img.width, (e.clientX - r.left) * k)), Math.max(0, Math.min(img.height, (e.clientY - r.top) * k))]; };
+$('zone').addEventListener('pointerdown', e => { if (!img) return; d0 = pt(e); $('zone').setPointerCapture(e.pointerId); });
+$('zone').addEventListener('pointermove', e => { if (!d0) return; const [x, y] = pt(e); rect = { x: Math.min(x, d0[0]), y: Math.min(y, d0[1]), w: Math.abs(x - d0[0]), h: Math.abs(y - d0[1]) }; placer(); });
+$('zone').addEventListener('pointerup', () => { d0 = null; if (rect.w < 40 || rect.h < 40) { rect = { x: 0, y: 0, w: img.width, h: img.height }; placer(); } });
+addEventListener('resize', () => img && placer());
+etat.cadrer = (x, y, w, h) => { rect = { x, y, w, h }; placer(); };
+
+function juger(s, larg) {
+  const [a, b] = s, n = a >= 30 && b >= 15 ? 'bon' : a >= 15 && b >= 10 ? 'juste' : 'faible';
+  const t = { bon: 'BON CANDIDAT', juste: 'CANDIDAT LIMITE', faible: 'CANDIDAT FAIBLE' }[n];
+  const av = [];
+  if (larg < 400) av.push('Recadrage de ' + Math.round(larg) + ' px seulement : rapprochez-vous, la mesure est pessimiste.');
+  if (n === 'juste') av.push('À essayer en direct avant de trancher.');
+  if (n === 'faible') av.push('Trop peu de détails contrastés (surface unie, texte fin, relief).');
+  return { n, t, av };
+}
+$('mesurer').onclick = async () => {
+  $('mesurer').disabled = true; $('barre').style.display = 'block'; $('barrei').style.width = '0';
+  const c = document.createElement('canvas'); c.width = L; c.height = Math.round(L * rect.h / rect.w);
+  c.getContext('2d').drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, c.width, c.height); recadre = c.toDataURL('image/png');
+  const im = new Image(); im.src = recadre; await im.decode();
+  try {
+    const { Compiler } = await import('../lib/mindar-image.prod.js'); const comp = new Compiler(), t0 = performance.now();
+    const d = await comp.compileImageTargets([im], p => { $('barrei').style.width = p + '%'; });
+    const s = d[0].trackingData.map(x => x.points.length); cible = new Blob([await comp.exportData()]);
+    const j = juger(s, rect.w); etat.suivi = s; etat.verdict = j.n; etat.duree = Math.round((performance.now() - t0) / 100) / 10;
+    $('score').textContent = s.join(' / '); $('verdict').className = j.n; $('verdict').textContent = j.t; $('avis').innerHTML = j.av.map(x => '<p>' + x + '</p>').join('');
+    $('dl').href = recadre; $('dl').download = ($('nom').value.trim() || 'candidat').replace(/[^\w\- ]+/g, '_') + '.png'; $('res').style.display = 'block';
+    const v = document.createElement('canvas'); v.width = 112; v.height = 112; const m = Math.min(c.width, c.height);
+    v.getContext('2d').drawImage(c, (c.width - m) / 2, (c.height - m) / 2, m, m, 0, 0, 112, 112);
+    const l = lire(); l.unshift({ nom: $('nom').value.trim() || 'Candidat ' + (l.length + 1), date: new Date().toISOString().slice(0, 16).replace('T', ' '), suivi: s, n: j.n, vig: v.toDataURL('image/jpeg', .7) }); ecrire(l.slice(0, 30)); lister();
+    $('res').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { $('score').textContent = 'Mesure impossible'; $('verdict').className = 'faible'; $('verdict').textContent = String(e).slice(0, 120); $('res').style.display = 'block'; etat.erreur = String(e); }
+  $('mesurer').disabled = false; $('barre').style.display = 'none';
+};
+function lister() {
+  const l = lire(); if (!l.length) { $('liste').innerHTML = '<small>Aucun pour l\'instant.</small>'; return; }
+  $('liste').replaceChildren(...l.map((c, i) => { const d = document.createElement('div'); d.className = 'ligne';
+    const im = document.createElement('img'); im.src = c.vig; const t = document.createElement('div'); const b = document.createElement('b'); b.textContent = c.nom;
+    const s = document.createElement('span'); s.className = c.n; s.textContent = c.suivi.join(' / ') + ' · ' + c.n; const dt = document.createElement('small'); dt.textContent = ' ' + c.date;
+    const x = document.createElement('button'); x.className = 'sec'; x.textContent = '✕'; x.onclick = () => { const q = lire(); q.splice(i, 1); ecrire(q); lister(); };
+    t.append(b, s, dt); d.append(im, t, x); return d; }));
+}
+lister();
+
+let mindar = null;
+$('direct').onclick = async () => {
+  if (!cible) return; $('direct').disabled = true; $('ar').classList.add('on'); $('arh').classList.add('on'); $('arb').classList.add('on'); $('arh').textContent = 'Démarrage de la caméra…';
+  etat.vu = 0; etat.perdu = 0; let amax = 0, dmin = 99, dmax = 0, tenu = false;
+  try {
+    const THREE = await import('three'); const { MindARThree } = await import('../lib/mindar-image-three.prod.js');
+    mindar = new MindARThree({ container: $('ar'), imageTargetSrc: URL.createObjectURL(cible), uiLoading: 'no', uiScanning: 'no', uiError: 'no', filterMinCF: 0.0005, filterBeta: 50, missTolerance: 10, warmupTolerance: 3 });
+    const { renderer, scene, camera } = mindar, ancre = mindar.addAnchor(0), r = rect.h / rect.w, e = .025;
+    const mc = new THREE.MeshBasicMaterial({ color: 0x5ff3e6, transparent: true, opacity: .9 });
+    for (const [w, h, x, y] of [[1 + 2 * e, e, 0, r / 2 + e / 2], [1 + 2 * e, e, 0, -r / 2 - e / 2], [e, r, -.5 - e / 2, 0], [e, r, .5 + e / 2, 0]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mc); m.position.set(x, y, 0); ancre.group.add(m); }
+    ancre.onTargetFound = () => { tenu = true; etat.vu++; }; ancre.onTargetLost = () => { tenu = false; etat.perdu++; };
+    await mindar.start(); etat.pret = true; const v = new THREE.Vector3();
+    renderer.setAnimationLoop(() => {
+      if (tenu) { ancre.group.updateWorldMatrix(true, false); ancre.group.worldToLocal(camera.getWorldPosition(v));
+        const d = v.length(), a = Math.round(Math.atan2(v.x, v.z) * 57.3); dmin = Math.min(dmin, d); dmax = Math.max(dmax, d); amax = Math.max(amax, Math.abs(a)); etat.dist = Math.round(d * 100) / 100; etat.angle = a;
+        $('arh').innerHTML = '<span class="bon">REPÈRE RECONNU</span> · distance ' + d.toFixed(1) + ' · angle ' + a + '°'; }
+      else $('arh').innerHTML = etat.vu ? '<span class="faible">SUIVI PERDU</span> · revenez de face' : 'Visez le repère, de face, à 1 m environ';
+      $('art').textContent = etat.vu ? `Tenu de ${dmin.toFixed(1)} à ${dmax.toFixed(1)} largeurs · jusqu'à ${amax}° de côté · ${etat.perdu} décrochage${etat.perdu > 1 ? 's' : ''}` : 'Reculez, avancez, décalez-vous à gauche et à droite : la page note jusqu\'où le suivi tient.';
+      renderer.render(scene, camera); });
+  } catch (err) { $('arh').textContent = 'Caméra indisponible : ' + String(err).slice(0, 80); etat.erreur = String(err); }
+};
+$('fermer').onclick = () => { if (mindar) { try { mindar.renderer.setAnimationLoop(null); mindar.stop(); } catch (e) {} mindar = null; } $('ar').replaceChildren(); document.querySelectorAll('.mindar-ui-overlay').forEach(e => e.remove());
+  for (const i of ['ar', 'arh', 'arb']) $(i).classList.remove('on'); $('direct').disabled = false; etat.pret = false; };
+</script>
+</body>
+</html>
