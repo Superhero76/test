@@ -25,8 +25,8 @@ input[type=file]{display:none}
 #score{font-size:28px;color:var(--l)}
 .bon{color:var(--l)}.juste{color:var(--a)}.faible{color:var(--e)}
 #barre{height:8px;background:#1d2b31;border-radius:4px;overflow:hidden;margin:8px 0;display:none}#barre i{display:block;height:100%;width:0;background:var(--l)}
-.ligne{display:flex;gap:10px;align-items:center;background:var(--p);border-radius:8px;padding:8px;margin:6px 0}
-.ligne img{width:56px;height:56px;object-fit:cover;border-radius:4px}.ligne div{flex:1;min-width:0}.ligne b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ligne{background:var(--p);border-radius:8px;padding:8px;margin:6px 0}.haut{display:flex;gap:10px;align-items:center}.act{display:flex;gap:8px;margin-top:8px}.act button{flex:1}.act button:last-child{flex:0 0 44px}
+.ligne img{width:56px;height:56px;object-fit:cover;border-radius:4px}.haut div{flex:1;min-width:0}.ligne b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ligne button{width:auto;margin:0;padding:8px 10px}
 #ar{position:fixed;inset:0;display:none;background:#000;z-index:10;overflow:hidden}#ar.on{display:block}
 #arh{position:fixed;left:0;right:0;top:0;padding:10px 14px;background:rgba(11,20,24,.88);z-index:20;display:none;font-size:14px}#arh.on{display:block}
@@ -65,7 +65,8 @@ small{color:#8fb0b6}
   <p><small>Points de suivi, grande et petite échelle. Références : ardoise 37/27 (bon), géocoin 31/16 (bon). C'est un tri : un bon score reste à confirmer à l'essai en direct.</small></p>
   <div id="avis"></div>
   <button id="direct">Essayer en direct</button>
-  <a class="bouton sec" id="dl" style="color:var(--t);border-color:#39505a;text-decoration:none">Enregistrer le recadrage</a>
+  <button class="sec" id="dl">Partager ou enregistrer le recadrage</button>
+  <p><small>Le recadrage est aussi gardé dans ce téléphone, avec le candidat, dans la liste ci-dessous.</small></p>
  </div>
 
  <div class="etiq">CANDIDATS MESURÉS</div>
@@ -82,14 +83,22 @@ const etat = window.__rep = { suivi: null, vu: 0, perdu: 0 };
 const lire = () => { try { return JSON.parse(localStorage.getItem(CLE)) || []; } catch (e) { return []; } };
 const ecrire = l => { try { localStorage.setItem(CLE, JSON.stringify(l)); } catch (e) {} };
 
-let img = null, rect = null, cible = null, recadre = null;
+let img = null, rect = null, cible = null, recadre = null, courant = null;
+const base = () => new Promise((ok, ko) => { const r = indexedDB.open('lh2050-reperage', 1); r.onupgradeneeded = () => r.result.createObjectStore('recadrages'); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); });
+const bd = async (mode, f) => { try { const d = await base(); return await new Promise((ok, ko) => { const t = d.transaction('recadrages', mode), q = f(t.objectStore('recadrages')); t.oncomplete = () => ok(q.result); t.onerror = () => ko(t.error); }); } catch (e) { return null; } };
+const garder = (id, url) => bd('readwrite', o => o.put(url, id)), reprendre = id => bd('readonly', o => o.get(id)), oublier = id => bd('readwrite', o => o.delete(id));
+const fichierDe = async (url, nom) => new File([await (await fetch(url)).blob()], nom.replace(/[^\w\- ]+/g, '_') + '.png', { type: 'image/png' });
+async function partager(url, nom) { const f = await fichierDe(url, nom); etat.partage = f.name;
+  if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: nom }); return 'partage'; } catch (e) { if (e.name === 'AbortError') return 'annule'; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.append(a); a.click(); a.remove(); return 'telechargement'; }
+function poser(c, w, h) { vue.width = w; vue.height = h; vue.getContext('2d').drawImage(c, 0, 0, w, h); img = vue; rect = { x: 0, y: 0, w, h };
+  $('zone').style.display = 'block'; $('etape2').style.display = 'block'; $('res').style.display = 'none'; placer(); etat.photo = [w, h]; }
 const vue = $('vue'), cadre = $('cadre');
 function placer() { const k = vue.clientWidth / img.width; Object.assign(cadre.style, { left: rect.x * k + 'px', top: rect.y * k + 'px', width: rect.w * k + 'px', height: rect.h * k + 'px' }); }
 async function charger(fichier) {
   if (!fichier) return; const b = await createImageBitmap(fichier, { imageOrientation: 'from-image' }).catch(() => null); if (!b) return;
   const k = Math.min(1, 2000 / Math.max(b.width, b.height)); vue.width = Math.round(b.width * k); vue.height = Math.round(b.height * k);
-  vue.getContext('2d').drawImage(b, 0, 0, vue.width, vue.height); img = vue; rect = { x: 0, y: 0, w: vue.width, h: vue.height };
-  $('zone').style.display = 'block'; $('etape2').style.display = 'block'; $('res').style.display = 'none'; placer(); etat.photo = [vue.width, vue.height];
+  courant = null; poser(b, vue.width, vue.height);
 }
 $('f').onchange = e => charger(e.target.files[0]); $('f2').onchange = e => charger(e.target.files[0]);
 $('tout').onclick = () => { rect = { x: 0, y: 0, w: img.width, h: img.height }; placer(); };
@@ -120,10 +129,12 @@ $('mesurer').onclick = async () => {
     const s = d[0].trackingData.map(x => x.points.length); cible = new Blob([await comp.exportData()]);
     const j = juger(s, rect.w); etat.suivi = s; etat.verdict = j.n; etat.duree = Math.round((performance.now() - t0) / 100) / 10;
     $('score').textContent = s.join(' / '); $('verdict').className = j.n; $('verdict').textContent = j.t; $('avis').innerHTML = j.av.map(x => '<p>' + x + '</p>').join('');
-    $('dl').href = recadre; $('dl').download = ($('nom').value.trim() || 'candidat').replace(/[^\w\- ]+/g, '_') + '.png'; $('res').style.display = 'block';
+    $('res').style.display = 'block';
     const v = document.createElement('canvas'); v.width = 112; v.height = 112; const m = Math.min(c.width, c.height);
     v.getContext('2d').drawImage(c, (c.width - m) / 2, (c.height - m) / 2, m, m, 0, 0, 112, 112);
-    const l = lire(); l.unshift({ nom: $('nom').value.trim() || 'Candidat ' + (l.length + 1), date: new Date().toISOString().slice(0, 16).replace('T', ' '), suivi: s, n: j.n, vig: v.toDataURL('image/jpeg', .7) }); ecrire(l.slice(0, 30)); lister();
+    let l = lire(); const anc = l.find(x => x.id === courant), id = anc ? anc.id : 'c' + Date.now();
+    const fiche = { id, nom: $('nom').value.trim() || (anc ? anc.nom : 'Candidat ' + (l.length + 1)), date: new Date().toISOString().slice(0, 16).replace('T', ' '), suivi: s, n: j.n, vig: v.toDataURL('image/jpeg', .7) };
+    l = [fiche, ...l.filter(x => x.id !== id)]; for (const x of l.slice(30)) if (x.id) oublier(x.id); ecrire(l.slice(0, 30)); courant = id; etat.garde = (await garder(id, recadre)) !== null; lister();
     $('res').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('score').textContent = 'Mesure impossible'; $('verdict').className = 'faible'; $('verdict').textContent = String(e).slice(0, 120); $('res').style.display = 'block'; etat.erreur = String(e); }
   $('mesurer').disabled = false; $('barre').style.display = 'none';
@@ -133,10 +144,14 @@ function lister() {
   $('liste').replaceChildren(...l.map((c, i) => { const d = document.createElement('div'); d.className = 'ligne';
     const im = document.createElement('img'); im.src = c.vig; const t = document.createElement('div'); const b = document.createElement('b'); b.textContent = c.nom;
     const s = document.createElement('span'); s.className = c.n; s.textContent = c.suivi.join(' / ') + ' · ' + c.n; const dt = document.createElement('small'); dt.textContent = ' ' + c.date;
-    const x = document.createElement('button'); x.className = 'sec'; x.textContent = '✕'; x.onclick = () => { const q = lire(); q.splice(i, 1); ecrire(q); lister(); };
-    t.append(b, s, dt); d.append(im, t, x); return d; }));
+    const x = document.createElement('button'); x.className = 'sec'; x.textContent = '✕'; x.onclick = () => { const q = lire(); q.splice(i, 1); ecrire(q); if (c.id) oublier(c.id); lister(); };
+    const bt = (txt, f) => { const k = document.createElement('button'); k.className = 'sec'; k.textContent = txt; k.onclick = async () => { const u = c.id && await reprendre(c.id); if (!u) { k.textContent = 'perdu'; k.disabled = true; return; } f(u); }; return k; };
+    const rp = bt('Reprendre', async u => { const m = new Image(); m.src = u; await m.decode(); courant = c.id; $('nom').value = c.nom; poser(m, m.width, m.height); $('etape2').scrollIntoView({ behavior: 'smooth' }); });
+    const pa = bt('Partager', u => partager(u, c.nom));
+    const act = document.createElement('div'); act.className = 'act'; act.append(rp, pa, x); t.append(b, s, dt); const haut = document.createElement('div'); haut.className = 'haut'; haut.append(im, t); d.append(haut, act); return d; }));
 }
 lister();
+$('dl').onclick = () => recadre && partager(recadre, $('nom').value.trim() || 'candidat');
 
 let mindar = null;
 $('direct').onclick = async () => {
