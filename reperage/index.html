@@ -31,7 +31,7 @@ input[type=file]{display:none}
 #ar{position:fixed;inset:0;display:none;background:#000;z-index:10;overflow:hidden}#ar.on{display:block}
 #arh{position:fixed;left:0;right:0;top:0;padding:10px 14px;background:rgba(11,20,24,.88);z-index:20;display:none;font-size:14px}#arh.on{display:block}
 #arb{position:fixed;left:0;right:0;bottom:0;padding:10px 14px 16px;background:rgba(11,20,24,.88);z-index:20;display:none}#arb.on{display:block}
-#arb button{margin:8px 0 0}
+#arb button{margin:8px 0 0}#arr{color:#ffb84d;margin-top:6px;min-height:1.2em}.rel{font-size:12px;color:#ffb84d;margin-top:3px;word-break:break-word}
 small{color:#8fb0b6}
 </style>
 <script type="importmap">{"imports":{"three":"../lib/three.module.js","three/addons/":"../lib/addons/"}}</script>
@@ -75,7 +75,7 @@ small{color:#8fb0b6}
 
 <div id="ar"></div>
 <div id="arh"></div>
-<div id="arb"><div id="art"></div><button id="fermer">Fermer</button></div>
+<div id="arb"><div id="art"></div><div id="arr"></div><button id="relever">Relever cette position</button><button id="fermer" class="sec">Fermer</button></div>
 
 <script type="module">
 const $ = i => document.getElementById(i), CLE = 'lh2050-reperage-v1', L = 800;
@@ -148,7 +148,8 @@ function lister() {
     const bt = (txt, f) => { const k = document.createElement('button'); k.className = 'sec'; k.textContent = txt; k.onclick = async () => { const u = c.id && await reprendre(c.id); if (!u) { k.textContent = 'perdu'; k.disabled = true; return; } f(u); }; return k; };
     const rp = bt('Reprendre', async u => { const m = new Image(); m.src = u; await m.decode(); courant = c.id; $('nom').value = c.nom; poser(m, m.width, m.height); $('etape2').scrollIntoView({ behavior: 'smooth' }); });
     const pa = bt('Partager', u => partager(u, c.nom));
-    const act = document.createElement('div'); act.className = 'act'; act.append(rp, pa, x); t.append(b, s, dt); const haut = document.createElement('div'); haut.className = 'haut'; haut.append(im, t); d.append(haut, act); return d; }));
+    const act = document.createElement('div'); act.className = 'act'; act.append(rp, pa, x); t.append(b, s, dt);
+    (c.releves || []).forEach((r, k) => { const q = document.createElement('div'); q.className = 'rel'; q.textContent = `Relevé ${k + 1} · ${r.date} : distance ${r.d} · angle ${r.a}° · hauteur ${r.h}° (${r.x} ${r.y} ${r.z})`; t.append(q); }); const haut = document.createElement('div'); haut.className = 'haut'; haut.append(im, t); d.append(haut, act); return d; }));
 }
 lister();
 $('dl').onclick = () => recadre && partager(recadre, $('nom').value.trim() || 'candidat');
@@ -156,7 +157,7 @@ $('dl').onclick = () => recadre && partager(recadre, $('nom').value.trim() || 'c
 let mindar = null;
 $('direct').onclick = async () => {
   if (!cible) return; $('direct').disabled = true; $('ar').classList.add('on'); $('arh').classList.add('on'); $('arb').classList.add('on'); $('arh').textContent = 'Démarrage de la caméra…';
-  etat.vu = 0; etat.perdu = 0; let amax = 0, dmin = 99, dmax = 0, tenu = false;
+  etat.vu = 0; etat.perdu = 0; let amax = 0, dmin = 99, dmax = 0, tenu = false, rel = null; $('arr').textContent = '';
   try {
     const THREE = await import('three'); const { MindARThree } = await import('../lib/mindar-image-three.prod.js');
     mindar = new MindARThree({ container: $('ar'), imageTargetSrc: URL.createObjectURL(cible), uiLoading: 'no', uiScanning: 'no', uiError: 'no', filterMinCF: 0.0005, filterBeta: 50, missTolerance: 10, warmupTolerance: 3 });
@@ -165,13 +166,20 @@ $('direct').onclick = async () => {
     for (const [w, h, x, y] of [[1 + 2 * e, e, 0, r / 2 + e / 2], [1 + 2 * e, e, 0, -r / 2 - e / 2], [e, r, -.5 - e / 2, 0], [e, r, .5 + e / 2, 0]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mc); m.position.set(x, y, 0); ancre.group.add(m); }
     ancre.onTargetFound = () => { tenu = true; etat.vu++; }; ancre.onTargetLost = () => { tenu = false; etat.perdu++; };
     await mindar.start(); etat.pret = true; const v = new THREE.Vector3();
+    $('relever').onclick = () => { if (!tenu) { $('arr').textContent = 'Visez d\'abord le repère.'; return; } rel = { t0: performance.now(), pts: [] }; $('relever').disabled = true; $('arr').textContent = 'Relevé en cours : restez immobile…'; };
     renderer.setAnimationLoop(() => {
       if (tenu) { ancre.group.updateWorldMatrix(true, false); ancre.group.worldToLocal(camera.getWorldPosition(v));
-        const d = v.length(), a = Math.round(Math.atan2(v.x, v.z) * 57.3); dmin = Math.min(dmin, d); dmax = Math.max(dmax, d); amax = Math.max(amax, Math.abs(a)); etat.dist = Math.round(d * 100) / 100; etat.angle = a;
-        $('arh').innerHTML = '<span class="bon">REPÈRE RECONNU</span> · distance ' + d.toFixed(1) + ' · angle ' + a + '°'; }
-      else $('arh').innerHTML = etat.vu ? '<span class="faible">SUIVI PERDU</span> · revenez de face' : 'Visez le repère, de face, à 1 m environ';
+        const d = v.length(), a = Math.round(Math.atan2(v.x, v.z) * 57.3), hh = Math.round(Math.atan2(v.y, Math.hypot(v.x, v.z)) * 57.3); etat.haut = hh;
+        if (rel) { rel.pts.push(v.clone()); if (performance.now() - rel.t0 > 1500) finir(rel.pts); }
+        dmin = Math.min(dmin, d); dmax = Math.max(dmax, d); amax = Math.max(amax, Math.abs(a)); etat.dist = Math.round(d * 100) / 100; etat.angle = a;
+        $('arh').innerHTML = '<span class="bon">REPÈRE RECONNU</span> · distance ' + d.toFixed(1) + ' · angle ' + a + '° · hauteur ' + hh + '°'; }
+      else { if (rel) { rel = null; $('relever').disabled = false; $('arr').textContent = 'Suivi perdu pendant le relevé : recommencez.'; } $('arh').innerHTML = etat.vu ? '<span class="faible">SUIVI PERDU</span> · revenez de face' : 'Visez le repère, de face, à 1 m environ'; }
       $('art').textContent = etat.vu ? `Tenu de ${dmin.toFixed(1)} à ${dmax.toFixed(1)} largeurs · jusqu'à ${amax}° de côté · ${etat.perdu} décrochage${etat.perdu > 1 ? 's' : ''}` : 'Reculez, avancez, décalez-vous à gauche et à droite : la page note jusqu\'où le suivi tient.';
       renderer.render(scene, camera); });
+    const finir = pts => { rel = null; $('relever').disabled = false; const m = pts.reduce((s, q) => s.add(q), new THREE.Vector3()).divideScalar(pts.length);
+      const r = { date: new Date().toTimeString().slice(0, 5), d: +m.length().toFixed(2), a: Math.round(Math.atan2(m.x, m.z) * 57.3), h: Math.round(Math.atan2(m.y, Math.hypot(m.x, m.z)) * 57.3), x: +m.x.toFixed(3), y: +m.y.toFixed(3), z: +m.z.toFixed(3), n: pts.length };
+      const l = lire(), f = l.find(x => x.id === courant); if (f) { f.releves = [...(f.releves || []), r].slice(-6); ecrire(l); lister(); }
+      etat.releve = r; $('arr').textContent = `Relevé noté (${f ? f.nom : 'sans candidat'}) : distance ${r.d} · angle ${r.a}° · hauteur ${r.h}°`; };
   } catch (err) { $('arh').textContent = 'Caméra indisponible : ' + String(err).slice(0, 80); etat.erreur = String(err); }
 };
 $('fermer').onclick = () => { if (mindar) { try { mindar.renderer.setAnimationLoop(null); mindar.stop(); } catch (e) {} mindar = null; } $('ar').replaceChildren(); document.querySelectorAll('.mindar-ui-overlay').forEach(e => e.remove());
